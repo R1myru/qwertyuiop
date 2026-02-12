@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R1 // PROTOCOL</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=JetBrains+Mono:wght@400;700&family=Creepster&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- БАЗА --- */
+        :root {
+            --bg-color: #050505;
+            --term-text: #b0b0b0; 
+            --alert-red: #ff3333;
+            --blood-red: #8a0303; 
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            background-color: var(--bg-color);
+            overflow: hidden;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--term-text);
+            cursor: crosshair;
+        }
+
+        /* --- ШЕЙДЕР --- */
+        #canvas-container {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+            opacity: 0.6;
+        }
+
+        /* --- VHS --- */
+        .vhs-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 100;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+                to bottom,
+                transparent 0px,
+                transparent 2px,
+                rgba(0, 0, 0, 0.4) 3px
+            );
+        }
+        .vhs-overlay::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(0,0,0,0) 30%, rgba(0,0,0,0.8) 90%, #000 100%);
+        }
+
+        /* --- HUD --- */
+        .hud-info {
+            position: fixed;
+            padding: 20px;
+            z-index: 50;
+            width: 100%;
+            box-sizing: border-box;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            opacity: 0.7;
+            text-transform: uppercase;
+        }
+        .top-hud { top: 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .bottom-hud { bottom: 0; border-top: 1px solid rgba(255,255,255,0.1); }
+        
+        .status-dot { color: var(--alert-red); animation: blink 2s infinite; }
+        @keyframes blink { 50% { opacity: 0.3; } }
+
+        /* --- КАРТОЧКА --- */
+        .wrapper {
+            position: relative;
+            z-index: 10;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+        }
+
+        .card {
+            background: rgba(10, 10, 10, 0.92);
+            border: 1px solid #444;
+            padding: 40px 30px;
+            max-width: 500px;
+            width: 100%;
+            position: relative;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 60px rgba(0,0,0,0.9);
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+
+        .cr { position: absolute; width: 10px; height: 10px; border: 2px solid #666; transition: 0.3s; }
+        .tl { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+        .tr { top: -1px; right: -1px; border-left: 0; border-bottom: 0; }
+        .bl { bottom: -1px; left: -1px; border-right: 0; border-top: 0; }
+        .br { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+        .card:hover .cr { width: 20px; height: 20px; border-color: #fff; }
+
+        .header-section { border-bottom: 1px dashed #444; padding-bottom: 15px; margin-bottom: 20px; }
+        .name { font-size: 2rem; font-weight: 700; color: #fff; letter-spacing: 2px; margin-bottom: 5px; }
+        .alias { font-family: 'Courier Prime', monospace; font-size: 1.2rem; color: #888; }
+
+        .grid-links { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 25px; }
+        .btn {
+            display: flex; justify-content: center; align-items: center; padding: 14px;
+            background: transparent; border: 1px solid #555; color: #ccc;
+            text-decoration: none; text-transform: uppercase; font-size: 0.85rem;
+            letter-spacing: 1px; transition: all 0.2s; position: relative;
+        }
+        .btn:hover {
+            background: #ccc; color: #000; border-color: #fff;
+            box-shadow: 0 0 15px rgba(200,200,200,0.3); transform: translateY(-2px);
+        }
+
+        /* Signal/SimpleX */
+        .crossed-out-wrapper { position: relative; }
+        .strike-line {
+            position: absolute; top: 50%; left: -5%; width: 110%; height: 2px;
+            background: var(--blood-red); transform: rotate(-10deg);
+            box-shadow: 0 0 5px var(--blood-red); pointer-events: none; opacity: 0.9;
+        }
+        .simplex-text {
+            position: absolute; top: -25px; left: 0; width: 100%; text-align: center;
+            font-family: 'Creepster', cursive; font-size: 1.4rem; color: var(--blood-red);
+            text-shadow: 1px 1px 0px #000; transform: rotate(-5deg); pointer-events: none;
+            animation: drip 3s infinite alternate;
+        }
+        @keyframes drip { 0% { transform: rotate(-5deg) translateY(0); } 100% { transform: rotate(-5deg) translateY(2px); } }
+        .btn-dead { border-color: #333; color: #444; pointer-events: auto; }
+        .btn-dead:hover { background: transparent; color: #444; box-shadow: none; transform: none; border-color: #333; cursor: default; }
+        .simplex-link-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+
+        @media (max-width: 500px) {
+            .name { font-size: 1.6rem; }
+            .grid-links { grid-template-columns: 1fr; gap: 30px; }
+            .simplex-text { top: -20px; font-size: 1.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    <div class="vhs-overlay"></div>
+
+    <div class="hud-info top-hud">
+        <span class="status-dot">● НЕТ СЕТИ</span>
+        <span>ID: R1_BACKUP</span>
+        <span id="clock">00:00</span>
+    </div>
+
+    <div class="wrapper">
+        <div class="card">
+            <div class="cr tl"></div><div class="cr tr"></div>
+            <div class="cr bl"></div><div class="cr br"></div>
+
+            <div class="header-section">
+                <div class="name">ИГНАТ</div>
+                <div class="alias">USERNAME: r1 // r1myru</div>
+            </div>
+
+            <div class="grid-links">
+                <a href="https://t.me/r1myru" target="_blank" class="btn">TELEGRAM</a>
+                <a href="https://instagram.com/r1myru" target="_blank" class="btn">INSTAGRAM</a>
+                <a href="https://open.spotify.com/user/v6ssxdudqcrsmif3yj5o9bamj" target="_blank" class="btn">SPOTIFY</a>
+                
+                <div class="crossed-out-wrapper">
+                    <div class="btn btn-dead">SIGNAL</div>
+                    <div class="strike-line"></div>
+                    <div class="simplex-text">SimpleX</div>
+                    <a href="https://smp15.simplex.im/a#WGlVvoQJr_w6VBFook9SdAbT62ZtZMJBwuJEuYtppGM" target="_blank" class="simplex-link-overlay"></a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="hud-info bottom-hud">
+        <span>ПРОТОКОЛ ВОССТАНОВЛЕНИЯ v9.0</span>
+        <span>LAST PING: ERROR</span>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        setInterval(() => {
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString('ru-RU');
+        }, 1000);
+
+        const isMobile = window.innerWidth < 600;
+
+        const vertexShader = `void main() { gl_Position = vec4( position, 1.0 ); }`;
+        const fragmentShader = `
+            uniform float u_time;
+            uniform vec2 u_resolution;
+            uniform vec2 u_mouse;
+            uniform float u_eye_open; 
+            uniform float u_blink;
+            uniform vec2 u_eye_pos; 
+            uniform float u_eye_size; 
+            uniform bool u_is_mobile;
+
+            float random (in vec2 st) { return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123); }
+            float noise (in vec2 st) {
+                vec2 i = floor(st); vec2 f = fract(st);
+                float a = random(i); float b = random(i + vec2(1.0, 0.0));
+                float c = random(i + vec2(0.0, 1.0)); float d = random(i + vec2(1.0, 1.0));
+                vec2 u = f * f * (3.0 - 2.0 * f);
+                return mix(a, b, u.x) + (c - a)* u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+            }
+            float fbm (in vec2 st) {
+                float v = 0.0; float a = .5;
+                for (int i = 0; i < 5; i++) { v += a * noise(st); st *= 2.; a *= .5; }
+                return v;
+            }
+            float dither4x4(vec2 position, float brightness) {
+                int x = int(mod(position.x, 4.0)); int y = int(mod(position.y, 4.0));
+                int index = x + y * 4; float limit = 0.0;
+                if (x < 8) {
+                    if (index==0) limit=0.0625; if (index==1) limit=0.5625; if (index==2) limit=0.1875; if (index==3) limit=0.6875;
+                    if (index==4) limit=0.8125; if (index==5) limit=0.3125; if (index==6) limit=0.9375; if (index==7) limit=0.4375;
+                    if (index==8) limit=0.25;   if (index==9) limit=0.75;   if (index==10) limit=0.125; if (index==11) limit=0.625;
+                    if (index==12) limit=1.0;   if (index==13) limit=0.5;   if (index==14) limit=0.875; if (index==15) limit=0.375;
+                }
+                return brightness < limit ? 0.0 : 1.0;
+            }
+            
+            // ГЛАЗ (Исправлен: более узкий, миндалевидный)
+            float sdEye(vec2 p, float blink, float size) {
+                // Коэффициент 0.4 делает глаз узким (миндалевидным)
+                float eyeHeight = size * 0.4 * (1.0 - blink);
+                
+                // Растягиваем Y сильнее, чтобы получить эллипс
+                float d = length(vec2(p.x, p.y * (size / eyeHeight))) - size;
+                return d;
+            }
+            
+            // ЗРАЧОК (Меньше размером)
+            float sdPupil(vec2 p, vec2 offset, float size) { 
+                return length(p - offset) - (size * 0.25); // 0.25 = маленький зрачок
+            }
+
+            void main() {
+                vec2 st = gl_FragCoord.xy / u_resolution.xy;
+                st.x *= u_resolution.x / u_resolution.y;
+
+                float interaction = 0.0;
+                vec2 mousePosScaled = vec2(0.5);
+
+                if (!u_is_mobile) {
+                    vec2 mouse = u_mouse / u_resolution;
+                    mousePosScaled = vec2(mouse.x * (u_resolution.x/u_resolution.y), mouse.y);
+                    float distToMouse = distance(st, mousePosScaled);
+                    interaction = smoothstep(0.4, 0.0, distToMouse) * 0.4;
+                }
+
+                vec2 q = vec2(0.);
+                q.x = fbm(st + 0.1 * u_time);
+                q.y = fbm(st + vec2(1.0));
+                
+                vec2 r = vec2(0.);
+                r.x = fbm(st + 1.0 * q + vec2(1.7, 9.2) + 0.15 * u_time - interaction);
+                r.y = fbm(st + 1.0 * q + vec2(8.3, 2.8) + 0.126 * u_time - interaction);
+                
+                float f = fbm(st + r);
+                float brightness = f * 1.6;
+
+                if (u_eye_open > 0.0) {
+                    vec2 eyeCenter = u_eye_pos; 
+                    eyeCenter.x *= (u_resolution.x/u_resolution.y); 
+
+                    vec2 p = st - eyeCenter;
+                    vec2 lookDir = vec2(0.0);
+
+                    if (u_is_mobile) {
+                        lookDir = vec2(0.0);
+                    } else {
+                        lookDir = mousePosScaled - eyeCenter;
+                        // Ограничиваем движение зрачка, чтобы не вылезал
+                        lookDir = clamp(lookDir, -u_eye_size*0.2, u_eye_size*0.2); 
+                    }
+                    
+                    float eyeShape = sdEye(p, u_blink, u_eye_size);
+                    float eyeMask = 1.0 - smoothstep(0.0, 0.01, eyeShape);
+                    
+                    // Зрачок двигается, но не выходит за границы эллипса
+                    float pupilShape = sdPupil(p, lookDir, u_eye_size);
+                    float pupilMask = 1.0 - smoothstep(0.0, 0.01, pupilShape);
+
+                    if (eyeMask > 0.5) {
+                        float eyeColor = 1.0; 
+                        if (pupilMask > 0.5) eyeColor = 0.0;
+                        brightness = mix(brightness, eyeColor, u_eye_open); 
+                    }
+                }
+
+                float d = dither4x4(gl_FragCoord.xy / 3.0, brightness);
+                gl_FragColor = vec4(vec3(d), 1.0);
+            }
+        `;
+
+        const container = document.getElementById('canvas-container');
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        const uniforms = {
+            u_time: { value: 0.0 },
+            u_resolution: { value: new THREE.Vector2() },
+            u_mouse: { value: new THREE.Vector2(0.5, 0.5) },
+            u_eye_open: { value: 0.0 }, 
+            u_blink: { value: 0.0 },
+            u_eye_pos: { value: new THREE.Vector2(0.5, 0.5) }, 
+            u_eye_size: { value: 0.15 }, 
+            u_is_mobile: { value: isMobile }
+        };
+        const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
+        scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
+
+        function resize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            renderer.setSize(width, height);
+            uniforms.u_resolution.value.set(width, height);
+            uniforms.u_is_mobile.value = width < 600;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        document.addEventListener('mousemove', (e) => {
+            if (!uniforms.u_is_mobile.value) {
+                uniforms.u_mouse.value.x = e.clientX;
+                uniforms.u_mouse.value.y = window.innerHeight - e.clientY;
+            }
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            uniforms.u_time.value += 0.005;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        function lerp(start, end, duration, callback) {
+            let startTime = null;
+            function loop(currentTime) {
+                if (!startTime) startTime = currentTime;
+                let progress = (currentTime - startTime) / duration;
+                if (progress > 1) progress = 1;
+                callback(start + (end - start) * progress);
+                if (progress < 1) requestAnimationFrame(loop);
+            }
+            requestAnimationFrame(loop);
+        }
+
+        function triggerEyeEvent() {
+            // Меньше разброс размеров (0.1 - 0.2)
+            uniforms.u_eye_pos.value.set(Math.random() * 0.8 + 0.1, Math.random() * 0.8 + 0.1);
+            uniforms.u_eye_size.value = Math.random() * 0.1 + 0.1; 
+
+            lerp(0, 1, 2000, (v) => uniforms.u_eye_open.value = v);
+            
+            setTimeout(() => {
+                lerp(0, 1, 100, (v) => uniforms.u_blink.value = v);
+                setTimeout(() => lerp(1, 0, 100, (v) => uniforms.u_blink.value = v), 150);
+                setTimeout(() => {
+                     lerp(0, 1, 100, (v) => uniforms.u_blink.value = v);
+                     setTimeout(() => {
+                         lerp(1, 0, 2000, (v) => uniforms.u_eye_open.value = v);
+                         setTimeout(() => uniforms.u_blink.value = 0, 2000);
+                     }, 150);
+                }, 400);
+            }, 3000);
+
+            let nextTime = Math.random() * 10000 + 8000;
+            setTimeout(triggerEyeEvent, nextTime);
+        }
+        setTimeout(triggerEyeEvent, 4000);
+
+    </script>
+</body>
+</html>
